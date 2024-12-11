@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Darlehensrechner</title>
+    
+    <!-- React und ReactDOM -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    
+    <!-- Recharts -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.0/Recharts.min.js"></script>
+    
+    <!-- Babel für JSX -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-4">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useMemo } = React;
+        const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } = Recharts;
+
+        function DarlehensRechner() {
+            const [formData, setFormData] = useState({
+                darlehenssumme: 100000,
+                zinssatz: 3.5,
+                tilgungssatz: 2,
+                startDatum: '2024-01',
+                endDatum: '2034-01'
+            });
+
+            const berechneDarlehensplan = useMemo(() => {
+                const { darlehenssumme, zinssatz, tilgungssatz, startDatum, endDatum } = formData;
+                
+                const startDate = new Date(startDatum);
+                const endDate = new Date(endDatum);
+                const monate = (endDate.getFullYear() - startDate.getFullYear()) * 12 + 
+                             (endDate.getMonth() - startDate.getMonth());
+                
+                const monatsZins = zinssatz / 12 / 100;
+                const monatsTilgung = tilgungssatz / 12 / 100;
+                const monatsRate = darlehenssumme * (monatsZins + monatsTilgung);
+                
+                let restschuld = darlehenssumme;
+                const zahlungsplan = [];
+                
+                for (let i = 0; i <= monate; i++) {
+                    const zinsAnteil = restschuld * monatsZins;
+                    const tilgungsAnteil = monatsRate - zinsAnteil;
+                    
+                    const datum = new Date(startDate);
+                    datum.setMonth(startDate.getMonth() + i);
+                    
+                    zahlungsplan.push({
+                        monat: datum.toLocaleDateString('de-DE', { 
+                            year: 'numeric',
+                            month: 'short'
+                        }),
+                        restschuld: Math.max(0, restschuld),
+                        rate: monatsRate,
+                        zinsAnteil,
+                        tilgungsAnteil
+                    });
+                    
+                    restschuld -= tilgungsAnteil;
+                }
+                
+                return zahlungsplan;
+            }, [formData]);
+
+            const handleInputChange = (e) => {
+                const { name, value } = e.target;
+                setFormData(prev => ({
+                    ...prev,
+                    [name]: value
+                }));
+            };
+
+            const formatCurrency = (value) => {
+                return new Intl.NumberFormat('de-DE', {
+                    style: 'currency',
+                    currency: 'EUR'
+                }).format(value);
+            };
+
+            return (
+                <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
+                    <h1 className="text-2xl font-bold mb-6">Darlehensrechner</h1>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label className="block text-sm font-medium mb-1">
+                                Darlehenssumme (€)
+                            </label>
+                            <input
+                                type="number"
+                                name="darlehenssumme"
+                                value={formData.darlehenssumme}
+                                onChange={handleInputChange}
+                                className="w-full p-2 border rounded"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">
+                                Zinssatz (%)
+                            </label>
+                            <input
+                                type="number"
+                                step="0.1"
+                                name="zinssatz"
+                                value={formData.zinssatz}
+                                onChange={handleInputChange}
+                                className="w-full p-2 border rounded"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">
+                                Tilgungssatz (%)
+                            </label>
+                            <input
+                                type="number"
+                                step="0.1"
+                                name="tilgungssatz"
+                                value={formData.tilgungssatz}
+                                onChange={handleInputChange}
+                                className="w-full p-2 border rounded"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">
+                                Startdatum
+                            </label>
+                            <input
+                                type="month"
+                                name="startDatum"
+                                value={formData.startDatum}
+                                onChange={handleInputChange}
+                                className="w-full p-2 border rounded"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium mb-1">
+                                Enddatum
+                            </label>
+                            <input
+                                type="month"
+                                name="endDatum"
+                                value={formData.endDatum}
+                                onChange={handleInputChange}
+                                className="w-full p-2 border rounded"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="mb-6">
+                        <h3 className="text-lg font-medium mb-2">Zusammenfassung</h3>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="p-4 bg-gray-50 rounded">
+                                <div className="text-sm text-gray-600">Monatliche Rate</div>
+                                <div className="text-lg font-bold">
+                                    {formatCurrency(berechneDarlehensplan[0]?.rate || 0)}
+                                </div>
+                            </div>
+                            <div className="p-4 bg-gray-50 rounded">
+                                <div className="text-sm text-gray-600">Anfänglicher Zinsanteil</div>
+                                <div className="text-lg font-bold">
+                                    {formatCurrency(berechneDarlehensplan[0]?.zinsAnteil || 0)}
+                                </div>
+                            </div>
+                            <div className="p-4 bg-gray-50 rounded">
+                                <div className="text-sm text-gray-600">Anfänglicher Tilgungsanteil</div>
+                                <div className="text-lg font-bold">
+                                    {formatCurrency(berechneDarlehensplan[0]?.tilgungsAnteil || 0)}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div>
+                        <h3 className="text-lg font-medium mb-2">Tilgungsverlauf</h3>
+                        <div className="w-full overflow-x-auto">
+                            <LineChart
+                                width={800}
+                                height={400}
+                                data={berechneDarlehensplan.filter((_, index) => index % 12 === 0)}
+                                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                            >
+                                <CartesianGrid strokeDasharray="3 3" />
+                                <XAxis dataKey="monat" />
+                                <YAxis />
+                                <Tooltip formatter={(value) => formatCurrency(value)} />
+                                <Legend />
+                                <Line 
+                                    type="monotone" 
+                                    dataKey="restschuld" 
+                                    stroke="#8884d8" 
+                                    name="Restschuld" 
+                                />
+                                <Line 
+                                    type="monotone" 
+                                    dataKey="zinsAnteil" 
+                                    stroke="#82ca9d" 
+                                    name="Zinsanteil" 
+                                />
+                                <Line 
+                                    type="monotone" 
+                                    dataKey="tilgungsAnteil" 
+                                    stroke="#ffc658" 
+                                    name="Tilgungsanteil" 
+                                />
+                            </LineChart>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<DarlehensRechner />);
+    </script>
+</body>
+</html>
