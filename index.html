@@ -6,27 +6,41 @@
     <title>Darlehensrechner</title>
     
     <!-- React und ReactDOM -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- D3 (wird von Recharts benötigt) -->
+    <script src="https://unpkg.com/d3-array@3.2.4/dist/d3-array.min.js"></script>
+    <script src="https://unpkg.com/d3-scale@4.0.2/dist/d3-scale.min.js"></script>
+    <script src="https://unpkg.com/d3-shape@3.2.0/dist/d3-shape.min.js"></script>
     
     <!-- Recharts -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/recharts/2.12.0/Recharts.min.js"></script>
+    <script src="https://unpkg.com/recharts@2.12.0/umd/Recharts.js"></script>
     
-    <!-- Babel für JSX -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+    <!-- Babel -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tailwind -->
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 </head>
 <body class="bg-gray-100 p-4">
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useMemo } = React;
-        const { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend } = Recharts;
+        // Recharts-Komponenten global verfügbar machen
+        const {
+            LineChart,
+            Line,
+            XAxis,
+            YAxis,
+            CartesianGrid,
+            Tooltip,
+            Legend,
+            ResponsiveContainer
+        } = window.Recharts;
 
         function DarlehensRechner() {
-            const [formData, setFormData] = useState({
+            const [formData, setFormData] = React.useState({
                 darlehenssumme: 100000,
                 zinssatz: 3.5,
                 tilgungssatz: 2,
@@ -34,43 +48,48 @@
                 endDatum: '2034-01'
             });
 
-            const berechneDarlehensplan = useMemo(() => {
-                const { darlehenssumme, zinssatz, tilgungssatz, startDatum, endDatum } = formData;
-                
-                const startDate = new Date(startDatum);
-                const endDate = new Date(endDatum);
-                const monate = (endDate.getFullYear() - startDate.getFullYear()) * 12 + 
-                             (endDate.getMonth() - startDate.getMonth());
-                
-                const monatsZins = zinssatz / 12 / 100;
-                const monatsTilgung = tilgungssatz / 12 / 100;
-                const monatsRate = darlehenssumme * (monatsZins + monatsTilgung);
-                
-                let restschuld = darlehenssumme;
-                const zahlungsplan = [];
-                
-                for (let i = 0; i <= monate; i++) {
-                    const zinsAnteil = restschuld * monatsZins;
-                    const tilgungsAnteil = monatsRate - zinsAnteil;
+            const berechneDarlehensplan = React.useMemo(() => {
+                try {
+                    const { darlehenssumme, zinssatz, tilgungssatz, startDatum, endDatum } = formData;
                     
-                    const datum = new Date(startDate);
-                    datum.setMonth(startDate.getMonth() + i);
+                    const startDate = new Date(startDatum);
+                    const endDate = new Date(endDatum);
+                    const monate = (endDate.getFullYear() - startDate.getFullYear()) * 12 + 
+                                 (endDate.getMonth() - startDate.getMonth());
                     
-                    zahlungsplan.push({
-                        monat: datum.toLocaleDateString('de-DE', { 
-                            year: 'numeric',
-                            month: 'short'
-                        }),
-                        restschuld: Math.max(0, restschuld),
-                        rate: monatsRate,
-                        zinsAnteil,
-                        tilgungsAnteil
-                    });
+                    const monatsZins = zinssatz / 12 / 100;
+                    const monatsTilgung = tilgungssatz / 12 / 100;
+                    const monatsRate = darlehenssumme * (monatsZins + monatsTilgung);
                     
-                    restschuld -= tilgungsAnteil;
+                    let restschuld = darlehenssumme;
+                    const zahlungsplan = [];
+                    
+                    for (let i = 0; i <= monate; i++) {
+                        const zinsAnteil = restschuld * monatsZins;
+                        const tilgungsAnteil = monatsRate - zinsAnteil;
+                        
+                        const datum = new Date(startDate);
+                        datum.setMonth(startDate.getMonth() + i);
+                        
+                        zahlungsplan.push({
+                            monat: datum.toLocaleDateString('de-DE', { 
+                                year: 'numeric',
+                                month: 'short'
+                            }),
+                            restschuld: Math.max(0, restschuld),
+                            rate: monatsRate,
+                            zinsAnteil,
+                            tilgungsAnteil
+                        });
+                        
+                        restschuld -= tilgungsAnteil;
+                    }
+                    
+                    return zahlungsplan;
+                } catch (error) {
+                    console.error('Fehler bei der Berechnung:', error);
+                    return [];
                 }
-                
-                return zahlungsplan;
             }, [formData]);
 
             const handleInputChange = (e) => {
@@ -183,37 +202,37 @@
 
                     <div>
                         <h3 className="text-lg font-medium mb-2">Tilgungsverlauf</h3>
-                        <div className="w-full overflow-x-auto">
-                            <LineChart
-                                width={800}
-                                height={400}
-                                data={berechneDarlehensplan.filter((_, index) => index % 12 === 0)}
-                                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                            >
-                                <CartesianGrid strokeDasharray="3 3" />
-                                <XAxis dataKey="monat" />
-                                <YAxis />
-                                <Tooltip formatter={(value) => formatCurrency(value)} />
-                                <Legend />
-                                <Line 
-                                    type="monotone" 
-                                    dataKey="restschuld" 
-                                    stroke="#8884d8" 
-                                    name="Restschuld" 
-                                />
-                                <Line 
-                                    type="monotone" 
-                                    dataKey="zinsAnteil" 
-                                    stroke="#82ca9d" 
-                                    name="Zinsanteil" 
-                                />
-                                <Line 
-                                    type="monotone" 
-                                    dataKey="tilgungsAnteil" 
-                                    stroke="#ffc658" 
-                                    name="Tilgungsanteil" 
-                                />
-                            </LineChart>
+                        <div style={{ width: '100%', height: 400 }}>
+                            <ResponsiveContainer>
+                                <LineChart
+                                    data={berechneDarlehensplan.filter((_, index) => index % 12 === 0)}
+                                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                                >
+                                    <CartesianGrid strokeDasharray="3 3" />
+                                    <XAxis dataKey="monat" />
+                                    <YAxis />
+                                    <Tooltip formatter={(value) => formatCurrency(value)} />
+                                    <Legend />
+                                    <Line 
+                                        type="monotone" 
+                                        dataKey="restschuld" 
+                                        stroke="#8884d8" 
+                                        name="Restschuld" 
+                                    />
+                                    <Line 
+                                        type="monotone" 
+                                        dataKey="zinsAnteil" 
+                                        stroke="#82ca9d" 
+                                        name="Zinsanteil" 
+                                    />
+                                    <Line 
+                                        type="monotone" 
+                                        dataKey="tilgungsAnteil" 
+                                        stroke="#ffc658" 
+                                        name="Tilgungsanteil" 
+                                    />
+                                </LineChart>
+                            </ResponsiveContainer>
                         </div>
                     </div>
                 </div>
