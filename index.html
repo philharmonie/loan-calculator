@@ -5,17 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Darlehensrechner</title>
     
-    <!-- React und ReactDOM -->
+    <!-- React -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     
-    <!-- D3 (wird von Recharts benötigt) -->
-    <script src="https://unpkg.com/d3-array@3.2.4/dist/d3-array.min.js"></script>
-    <script src="https://unpkg.com/d3-scale@4.0.2/dist/d3-scale.min.js"></script>
-    <script src="https://unpkg.com/d3-shape@3.2.0/dist/d3-shape.min.js"></script>
-    
-    <!-- Recharts -->
-    <script src="https://unpkg.com/recharts@2.12.0/umd/Recharts.js"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     
     <!-- Babel -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -25,20 +20,9 @@
 </head>
 <body class="bg-gray-100 p-4">
     <div id="root"></div>
+    <canvas id="chart" width="800" height="400"></canvas>
 
     <script type="text/babel">
-        // Recharts-Komponenten global verfügbar machen
-        const {
-            LineChart,
-            Line,
-            XAxis,
-            YAxis,
-            CartesianGrid,
-            Tooltip,
-            Legend,
-            ResponsiveContainer
-        } = window.Recharts;
-
         function DarlehensRechner() {
             const [formData, setFormData] = React.useState({
                 darlehenssumme: 100000,
@@ -47,6 +31,8 @@
                 startDatum: '2024-01',
                 endDatum: '2034-01'
             });
+
+            const chartRef = React.useRef(null);
 
             const berechneDarlehensplan = React.useMemo(() => {
                 try {
@@ -92,6 +78,75 @@
                 }
             }, [formData]);
 
+            React.useEffect(() => {
+                const ctx = document.getElementById('chart').getContext('2d');
+                
+                // Bestehenden Chart zerstören, falls vorhanden
+                if (chartRef.current) {
+                    chartRef.current.destroy();
+                }
+                
+                // Jährliche Daten filtern
+                const jaehrlicheDaten = berechneDarlehensplan.filter((_, index) => index % 12 === 0);
+                
+                // Neuen Chart erstellen
+                chartRef.current = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: jaehrlicheDaten.map(d => d.monat),
+                        datasets: [
+                            {
+                                label: 'Restschuld',
+                                data: jaehrlicheDaten.map(d => d.restschuld),
+                                borderColor: 'rgb(75, 192, 192)',
+                                tension: 0.1
+                            },
+                            {
+                                label: 'Zinsanteil',
+                                data: jaehrlicheDaten.map(d => d.zinsAnteil),
+                                borderColor: 'rgb(255, 99, 132)',
+                                tension: 0.1
+                            },
+                            {
+                                label: 'Tilgungsanteil',
+                                data: jaehrlicheDaten.map(d => d.tilgungsAnteil),
+                                borderColor: 'rgb(255, 205, 86)',
+                                tension: 0.1
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        plugins: {
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let value = context.raw;
+                                        return new Intl.NumberFormat('de-DE', {
+                                            style: 'currency',
+                                            currency: 'EUR'
+                                        }).format(value);
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            y: {
+                                ticks: {
+                                    callback: function(value) {
+                                        return new Intl.NumberFormat('de-DE', {
+                                            style: 'currency',
+                                            currency: 'EUR',
+                                            maximumFractionDigits: 0
+                                        }).format(value);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }, [berechneDarlehensplan]);
+
             const handleInputChange = (e) => {
                 const { name, value } = e.target;
                 setFormData(prev => ({
@@ -108,7 +163,7 @@
             };
 
             return (
-                <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6">
+                <div className="max-w-4xl mx-auto bg-white rounded-lg shadow-lg p-6 mb-6">
                     <h1 className="text-2xl font-bold mb-6">Darlehensrechner</h1>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
@@ -197,42 +252,6 @@
                                     {formatCurrency(berechneDarlehensplan[0]?.tilgungsAnteil || 0)}
                                 </div>
                             </div>
-                        </div>
-                    </div>
-
-                    <div>
-                        <h3 className="text-lg font-medium mb-2">Tilgungsverlauf</h3>
-                        <div style={{ width: '100%', height: 400 }}>
-                            <ResponsiveContainer>
-                                <LineChart
-                                    data={berechneDarlehensplan.filter((_, index) => index % 12 === 0)}
-                                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-                                >
-                                    <CartesianGrid strokeDasharray="3 3" />
-                                    <XAxis dataKey="monat" />
-                                    <YAxis />
-                                    <Tooltip formatter={(value) => formatCurrency(value)} />
-                                    <Legend />
-                                    <Line 
-                                        type="monotone" 
-                                        dataKey="restschuld" 
-                                        stroke="#8884d8" 
-                                        name="Restschuld" 
-                                    />
-                                    <Line 
-                                        type="monotone" 
-                                        dataKey="zinsAnteil" 
-                                        stroke="#82ca9d" 
-                                        name="Zinsanteil" 
-                                    />
-                                    <Line 
-                                        type="monotone" 
-                                        dataKey="tilgungsAnteil" 
-                                        stroke="#ffc658" 
-                                        name="Tilgungsanteil" 
-                                    />
-                                </LineChart>
-                            </ResponsiveContainer>
                         </div>
                     </div>
                 </div>
